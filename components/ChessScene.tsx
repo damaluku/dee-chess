@@ -48,6 +48,12 @@ export default function ChessScene() {
           0,
           (row - boardSize / 2) * tileSize + tileSize / 2
         );
+        tile.userData = {
+          type: "tile",
+          row,
+          col,
+        };
+
         scene.add(tile);
       }
     }
@@ -74,6 +80,12 @@ export default function ChessScene() {
       }
 
       if (mesh) {
+        mesh.userData = {
+          type: "piece",
+          color,
+          pieceType: type,
+        };
+
         mesh.castShadow = true;
         mesh.position.set(x, 0.75, z);
         scene.add(mesh);
@@ -186,37 +198,56 @@ export default function ChessScene() {
     let selectedPiece: THREE.Object3D | null = null;
 
     const onMouseClick = (event: MouseEvent) => {
-      // Convert mouse coordinates to normalized device coordinates
       mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
       mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
       raycaster.setFromCamera(mouse, camera);
       const intersects = raycaster.intersectObjects(scene.children, true);
 
-      if (intersects.length > 0) {
-        const firstHit = intersects[0].object;
+      if (intersects.length === 0) return;
 
-        // Check if it's a piece (you can later tag pieces with metadata)
-        if (
-          (firstHit as THREE.Mesh).geometry instanceof THREE.CylinderGeometry ||
-          (firstHit as THREE.Mesh).geometry instanceof THREE.ConeGeometry
-        ) {
-          if (selectedPiece) {
-            // Reset previously selected piece
-            (
-              (selectedPiece as THREE.Mesh)
-                .material as THREE.MeshStandardMaterial
-            ).emissive?.setHex(0x000000);
-          }
+      const clicked = intersects[0].object;
 
-          // Trigger explosion effect
-          createCaptureEffect(firstHit.position.clone());
-
-          // Remove the piece from the scene
-          scene.remove(firstHit);
-
-          selectedPiece = null;
+      if (clicked.userData?.type === "piece") {
+        if (selectedPiece) {
+          // Unselect current
+          (
+            (selectedPiece as THREE.Mesh).material as THREE.MeshStandardMaterial
+          ).emissive?.setHex(0x000000);
         }
+
+        // Select new piece
+        selectedPiece = clicked;
+        (
+          (selectedPiece as THREE.Mesh).material as THREE.MeshStandardMaterial
+        ).emissive = new THREE.Color(0x3333ff);
+      } else if (clicked.userData?.type === "tile" && selectedPiece) {
+        const { x, z } = clicked.position;
+
+        // Check if a piece is already on this tile
+        const occupied = scene.children.find((obj) => {
+          return (
+            obj.userData?.type === "piece" &&
+            Math.abs(obj.position.x - x) < 1 &&
+            Math.abs(obj.position.z - z) < 1
+          );
+        });
+
+        if (occupied) {
+          // Capture!
+          createCaptureEffect(occupied.position.clone());
+          scene.remove(occupied);
+        }
+
+        // Move selected piece
+        selectedPiece.position.x = x;
+        selectedPiece.position.z = z;
+
+        // Unselect
+        (
+          (selectedPiece as THREE.Mesh).material as THREE.MeshStandardMaterial
+        ).emissive?.setHex(0x000000);
+        selectedPiece = null;
       }
     };
 
