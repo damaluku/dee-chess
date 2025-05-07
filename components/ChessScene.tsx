@@ -52,6 +52,74 @@ export default function ChessScene() {
       }
     }
 
+    // Creatinf piece
+    const createPiece = (
+      type: "pawn" | "rook",
+      color: "white" | "black",
+      x: number,
+      z: number
+    ) => {
+      let mesh: THREE.Mesh | null = null;
+
+      const material = new THREE.MeshStandardMaterial({
+        color: color === "white" ? "#f0f0f0" : "#202020",
+      });
+
+      if (type === "pawn") {
+        const geometry = new THREE.CylinderGeometry(0.4, 0.4, 1.2, 32);
+        mesh = new THREE.Mesh(geometry, material);
+      } else if (type === "rook") {
+        const geometry = new THREE.ConeGeometry(0.6, 1.5, 16);
+        mesh = new THREE.Mesh(geometry, material);
+      }
+
+      if (mesh) {
+        mesh.castShadow = true;
+        mesh.position.set(x, 0.75, z);
+        scene.add(mesh);
+      }
+    };
+
+    // Add white pawns
+    for (let col = 0; col < 8; col++) {
+      const x = (col - 4) * tileSize + tileSize / 2;
+      const z = -3 * tileSize + tileSize / 2;
+      createPiece("pawn", "white", x, z);
+    }
+
+    // Add black pawns
+    for (let col = 0; col < 8; col++) {
+      const x = (col - 4) * tileSize + tileSize / 2;
+      const z = 2 * tileSize + tileSize / 2;
+      createPiece("pawn", "black", x, z);
+    }
+
+    // Add rooks
+    createPiece(
+      "rook",
+      "white",
+      -4 * tileSize + tileSize / 2,
+      -4 * tileSize + tileSize / 2
+    );
+    createPiece(
+      "rook",
+      "white",
+      3 * tileSize + tileSize / 2,
+      -4 * tileSize + tileSize / 2
+    );
+    createPiece(
+      "rook",
+      "black",
+      -4 * tileSize + tileSize / 2,
+      3 * tileSize + tileSize / 2
+    );
+    createPiece(
+      "rook",
+      "black",
+      3 * tileSize + tileSize / 2,
+      3 * tileSize + tileSize / 2
+    );
+
     const animate = () => {
       requestAnimationFrame(animate);
       renderer.render(scene, camera);
