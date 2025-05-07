@@ -120,6 +120,56 @@ export default function ChessScene() {
       3 * tileSize + tileSize / 2
     );
 
+    // Raycaster and mouse event
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+    let selectedPiece: THREE.Object3D | null = null;
+
+    const onMouseClick = (event: MouseEvent) => {
+      // Convert mouse coordinates to normalized device coordinates
+      mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+      raycaster.setFromCamera(mouse, camera);
+      const intersects = raycaster.intersectObjects(scene.children, true);
+
+      if (intersects.length > 0) {
+        const firstHit = intersects[0].object;
+
+        // Check if it's a piece (you can later tag pieces with metadata)
+        if (
+          (firstHit as THREE.Mesh).geometry instanceof THREE.CylinderGeometry ||
+          (firstHit as THREE.Mesh).geometry instanceof THREE.ConeGeometry
+        ) {
+          if (selectedPiece) {
+            // Reset previously selected piece color
+            (
+              (selectedPiece as THREE.Mesh)
+                .material as THREE.MeshStandardMaterial
+            ).emissive?.setHex(0x000000);
+          }
+
+          if (firstHit instanceof THREE.Mesh) {
+            if (selectedPiece) {
+              // Reset previously selected piece color
+              (
+                (selectedPiece as THREE.Mesh)
+                  .material as THREE.MeshStandardMaterial
+              ).emissive?.setHex(0x000000);
+            }
+
+            selectedPiece = firstHit;
+            if (selectedPiece instanceof THREE.Mesh) {
+              (selectedPiece.material as THREE.MeshStandardMaterial).emissive =
+                new THREE.Color(0x3333ff); // blue glow
+            }
+          }
+        }
+      }
+    };
+
+    window.addEventListener("click", onMouseClick);
+
     const animate = () => {
       requestAnimationFrame(animate);
       renderer.render(scene, camera);
@@ -136,6 +186,7 @@ export default function ChessScene() {
     return () => {
       window.removeEventListener("resize", resize);
       container.removeChild(renderer.domElement);
+      window.removeEventListener("click", onMouseClick);
     };
   }, []);
 
