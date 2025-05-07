@@ -48,6 +48,12 @@ export default function ChessScene() {
           0,
           (row - boardSize / 2) * tileSize + tileSize / 2
         );
+        tile.userData = {
+          type: "tile",
+          row,
+          col,
+        };
+
         scene.add(tile);
       }
     }
@@ -74,10 +80,76 @@ export default function ChessScene() {
       }
 
       if (mesh) {
+        mesh.userData = {
+          type: "piece",
+          color,
+          pieceType: type,
+        };
+
         mesh.castShadow = true;
         mesh.position.set(x, 0.75, z);
         scene.add(mesh);
       }
+    };
+
+    const createCaptureEffect = (position: THREE.Vector3) => {
+      const particles: THREE.Points[] = [];
+
+      const geometry = new THREE.BufferGeometry();
+      const count = 100;
+      const positions = new Float32Array(count * 3);
+      const velocities: THREE.Vector3[] = [];
+
+      for (let i = 0; i < count; i++) {
+        positions[i * 3] = position.x;
+        positions[i * 3 + 1] = position.y;
+        positions[i * 3 + 2] = position.z;
+        velocities.push(
+          new THREE.Vector3(
+            (Math.random() - 0.5) * 2,
+            Math.random() * 2,
+            (Math.random() - 0.5) * 2
+          )
+        );
+      }
+
+      geometry.setAttribute(
+        "position",
+        new THREE.BufferAttribute(positions, 3)
+      );
+
+      const material = new THREE.PointsMaterial({
+        color: 0xff5555,
+        size: 0.1,
+      });
+
+      const points = new THREE.Points(geometry, material);
+      scene.add(points);
+      particles.push(points);
+
+      // Animate particles
+      const startTime = performance.now();
+      const animateParticles = () => {
+        const timeElapsed = performance.now() - startTime;
+        if (timeElapsed > 1000) {
+          // Remove after 1s
+          scene.remove(points);
+          return;
+        }
+
+        const pos = points.geometry.attributes
+          .position as THREE.BufferAttribute;
+        for (let i = 0; i < count; i++) {
+          positions[i * 3] += velocities[i].x * 0.1;
+          positions[i * 3 + 1] += velocities[i].y * 0.1;
+          positions[i * 3 + 2] += velocities[i].z * 0.1;
+        }
+        pos.needsUpdate = true;
+
+        requestAnimationFrame(animateParticles);
+      };
+
+      animateParticles();
     };
 
     // Add white pawns
@@ -126,45 +198,56 @@ export default function ChessScene() {
     let selectedPiece: THREE.Object3D | null = null;
 
     const onMouseClick = (event: MouseEvent) => {
-      // Convert mouse coordinates to normalized device coordinates
       mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
       mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
       raycaster.setFromCamera(mouse, camera);
       const intersects = raycaster.intersectObjects(scene.children, true);
 
-      if (intersects.length > 0) {
-        const firstHit = intersects[0].object;
+      if (intersects.length === 0) return;
 
-        // Check if it's a piece (you can later tag pieces with metadata)
-        if (
-          (firstHit as THREE.Mesh).geometry instanceof THREE.CylinderGeometry ||
-          (firstHit as THREE.Mesh).geometry instanceof THREE.ConeGeometry
-        ) {
-          if (selectedPiece) {
-            // Reset previously selected piece color
-            (
-              (selectedPiece as THREE.Mesh)
-                .material as THREE.MeshStandardMaterial
-            ).emissive?.setHex(0x000000);
-          }
+      const clicked = intersects[0].object;
 
-          if (firstHit instanceof THREE.Mesh) {
-            if (selectedPiece) {
-              // Reset previously selected piece color
-              (
-                (selectedPiece as THREE.Mesh)
-                  .material as THREE.MeshStandardMaterial
-              ).emissive?.setHex(0x000000);
-            }
-
-            selectedPiece = firstHit;
-            if (selectedPiece instanceof THREE.Mesh) {
-              (selectedPiece.material as THREE.MeshStandardMaterial).emissive =
-                new THREE.Color(0x3333ff); // blue glow
-            }
-          }
+      if (clicked.userData?.type === "piece") {
+        if (selectedPiece) {
+          // Unselect current
+          (
+            (selectedPiece as THREE.Mesh).material as THREE.MeshStandardMaterial
+          ).emissive?.setHex(0x000000);
         }
+
+        // Select new piece
+        selectedPiece = clicked;
+        (
+          (selectedPiece as THREE.Mesh).material as THREE.MeshStandardMaterial
+        ).emissive = new THREE.Color(0x3333ff);
+      } else if (clicked.userData?.type === "tile" && selectedPiece) {
+        const { x, z } = clicked.position;
+
+        // Check if a piece is already on this tile
+        const occupied = scene.children.find((obj) => {
+          return (
+            obj.userData?.type === "piece" &&
+            Math.abs(obj.position.x - x) < 1 &&
+            Math.abs(obj.position.z - z) < 1
+          );
+        });
+
+        if (occupied) {
+          // Capture!
+          createCaptureEffect(occupied.position.clone());
+          scene.remove(occupied);
+        }
+
+        // Move selected piece
+        selectedPiece.position.x = x;
+        selectedPiece.position.z = z;
+
+        // Unselect
+        (
+          (selectedPiece as THREE.Mesh).material as THREE.MeshStandardMaterial
+        ).emissive?.setHex(0x000000);
+        selectedPiece = null;
       }
     };
 
