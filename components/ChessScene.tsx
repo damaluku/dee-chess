@@ -80,6 +80,66 @@ export default function ChessScene() {
       }
     };
 
+    const createCaptureEffect = (position: THREE.Vector3) => {
+      const particles: THREE.Points[] = [];
+
+      const geometry = new THREE.BufferGeometry();
+      const count = 100;
+      const positions = new Float32Array(count * 3);
+      const velocities: THREE.Vector3[] = [];
+
+      for (let i = 0; i < count; i++) {
+        positions[i * 3] = position.x;
+        positions[i * 3 + 1] = position.y;
+        positions[i * 3 + 2] = position.z;
+        velocities.push(
+          new THREE.Vector3(
+            (Math.random() - 0.5) * 2,
+            Math.random() * 2,
+            (Math.random() - 0.5) * 2
+          )
+        );
+      }
+
+      geometry.setAttribute(
+        "position",
+        new THREE.BufferAttribute(positions, 3)
+      );
+
+      const material = new THREE.PointsMaterial({
+        color: 0xff5555,
+        size: 0.1,
+      });
+
+      const points = new THREE.Points(geometry, material);
+      scene.add(points);
+      particles.push(points);
+
+      // Animate particles
+      const startTime = performance.now();
+      const animateParticles = () => {
+        const timeElapsed = performance.now() - startTime;
+        if (timeElapsed > 1000) {
+          // Remove after 1s
+          scene.remove(points);
+          return;
+        }
+
+        const pos = points.geometry.attributes
+          .position as THREE.BufferAttribute;
+        for (let i = 0; i < count; i++) {
+          positions[i * 3] += velocities[i].x * 0.1;
+          positions[i * 3 + 1] += velocities[i].y * 0.1;
+          positions[i * 3 + 2] += velocities[i].z * 0.1;
+        }
+        pos.needsUpdate = true;
+
+        requestAnimationFrame(animateParticles);
+      };
+
+      animateParticles();
+    };
+
     // Add white pawns
     for (let col = 0; col < 8; col++) {
       const x = (col - 4) * tileSize + tileSize / 2;
@@ -142,28 +202,20 @@ export default function ChessScene() {
           (firstHit as THREE.Mesh).geometry instanceof THREE.ConeGeometry
         ) {
           if (selectedPiece) {
-            // Reset previously selected piece color
+            // Reset previously selected piece
             (
               (selectedPiece as THREE.Mesh)
                 .material as THREE.MeshStandardMaterial
             ).emissive?.setHex(0x000000);
           }
 
-          if (firstHit instanceof THREE.Mesh) {
-            if (selectedPiece) {
-              // Reset previously selected piece color
-              (
-                (selectedPiece as THREE.Mesh)
-                  .material as THREE.MeshStandardMaterial
-              ).emissive?.setHex(0x000000);
-            }
+          // Trigger explosion effect
+          createCaptureEffect(firstHit.position.clone());
 
-            selectedPiece = firstHit;
-            if (selectedPiece instanceof THREE.Mesh) {
-              (selectedPiece.material as THREE.MeshStandardMaterial).emissive =
-                new THREE.Color(0x3333ff); // blue glow
-            }
-          }
+          // Remove the piece from the scene
+          scene.remove(firstHit);
+
+          selectedPiece = null;
         }
       }
     };
