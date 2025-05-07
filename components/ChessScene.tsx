@@ -63,33 +63,37 @@ export default function ChessScene() {
       type: "pawn" | "rook",
       color: "white" | "black",
       x: number,
-      z: number
+      z: number,
+      row: number,
+      col: number
     ) => {
-      let mesh: THREE.Mesh | null = null;
+      let mesh: THREE.Mesh;
 
       const material = new THREE.MeshStandardMaterial({
         color: color === "white" ? "#f0f0f0" : "#202020",
       });
 
       if (type === "pawn") {
-        const geometry = new THREE.CylinderGeometry(0.4, 0.4, 1.2, 32);
-        mesh = new THREE.Mesh(geometry, material);
-      } else if (type === "rook") {
-        const geometry = new THREE.ConeGeometry(0.6, 1.5, 16);
-        mesh = new THREE.Mesh(geometry, material);
+        mesh = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.4, 0.4, 1.2, 32),
+          material
+        );
+      } else {
+        mesh = new THREE.Mesh(new THREE.ConeGeometry(0.6, 1.5, 16), material);
       }
 
-      if (mesh) {
-        mesh.userData = {
-          type: "piece",
-          color,
-          pieceType: type,
-        };
+      mesh.castShadow = true;
+      mesh.position.set(x, 0.75, z);
 
-        mesh.castShadow = true;
-        mesh.position.set(x, 0.75, z);
-        scene.add(mesh);
-      }
+      mesh.userData = {
+        type: "piece",
+        pieceType: type,
+        color,
+        row,
+        col,
+      };
+
+      scene.add(mesh);
     };
 
     const createCaptureEffect = (position: THREE.Vector3) => {
@@ -152,44 +156,52 @@ export default function ChessScene() {
       animateParticles();
     };
 
-    // Add white pawns
+    // White pawns (row 1)
     for (let col = 0; col < 8; col++) {
       const x = (col - 4) * tileSize + tileSize / 2;
       const z = -3 * tileSize + tileSize / 2;
-      createPiece("pawn", "white", x, z);
+      createPiece("pawn", "white", x, z, 1, col);
     }
 
-    // Add black pawns
+    // Black pawns (row 6)
     for (let col = 0; col < 8; col++) {
       const x = (col - 4) * tileSize + tileSize / 2;
       const z = 2 * tileSize + tileSize / 2;
-      createPiece("pawn", "black", x, z);
+      createPiece("pawn", "black", x, z, 6, col);
     }
 
-    // Add rooks
+    // Rooks
     createPiece(
       "rook",
       "white",
       -4 * tileSize + tileSize / 2,
-      -4 * tileSize + tileSize / 2
+      -4 * tileSize + tileSize / 2,
+      0,
+      0
     );
     createPiece(
       "rook",
       "white",
       3 * tileSize + tileSize / 2,
-      -4 * tileSize + tileSize / 2
+      -4 * tileSize + tileSize / 2,
+      0,
+      7
     );
     createPiece(
       "rook",
       "black",
       -4 * tileSize + tileSize / 2,
-      3 * tileSize + tileSize / 2
+      3 * tileSize + tileSize / 2,
+      7,
+      0
     );
     createPiece(
       "rook",
       "black",
       3 * tileSize + tileSize / 2,
-      3 * tileSize + tileSize / 2
+      3 * tileSize + tileSize / 2,
+      7,
+      7
     );
 
     // Raycaster and mouse event
@@ -223,27 +235,63 @@ export default function ChessScene() {
         ).emissive = new THREE.Color(0x3333ff);
       } else if (clicked.userData?.type === "tile" && selectedPiece) {
         const { x, z } = clicked.position;
+        const targetRow = clicked.userData.row;
+        const targetCol = clicked.userData.col;
 
-        // Check if a piece is already on this tile
+        const srcRow = selectedPiece.userData.row;
+        const srcCol = selectedPiece.userData.col;
+        const pieceType = selectedPiece.userData.pieceType;
+        const pieceColor = selectedPiece.userData.color;
+
+        let isValid = false;
+
+        if (pieceType === "pawn") {
+          if (
+            pieceColor === "white" &&
+            targetRow === srcRow + 1 &&
+            targetCol === srcCol
+          ) {
+            isValid = true;
+          } else if (
+            pieceColor === "black" &&
+            targetRow === srcRow - 1 &&
+            targetCol === srcCol
+          ) {
+            isValid = true;
+          }
+        }
+
+        if (pieceType === "rook") {
+          if (targetRow === srcRow || targetCol === srcCol) {
+            isValid = true;
+          }
+        }
+
+        if (!isValid) {
+          console.log("❌ Invalid move!");
+          return;
+        }
+
+        // Check for capture
         const occupied = scene.children.find((obj) => {
           return (
             obj.userData?.type === "piece" &&
-            Math.abs(obj.position.x - x) < 1 &&
-            Math.abs(obj.position.z - z) < 1
+            obj.position.x === x &&
+            obj.position.z === z
           );
         });
 
         if (occupied) {
-          // Capture!
           createCaptureEffect(occupied.position.clone());
           scene.remove(occupied);
         }
 
-        // Move selected piece
+        // Move piece
         selectedPiece.position.x = x;
         selectedPiece.position.z = z;
+        selectedPiece.userData.row = targetRow;
+        selectedPiece.userData.col = targetCol;
 
-        // Unselect
         (
           (selectedPiece as THREE.Mesh).material as THREE.MeshStandardMaterial
         ).emissive?.setHex(0x000000);
